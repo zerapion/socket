@@ -103,6 +103,7 @@ string start(const string& message, struct sockaddr_in& clientAddr, int sock)
     
     /* i think i need this later */
     Player dealer = playerDatabase.find(playerName);                                          /* this will be used later */
+    
     checkParams(numPlayers, numHoles, playerName, response, shouldReturn);
     cout << "shouldReturn: " << shouldReturn << endl;
     if (shouldReturn)
@@ -251,6 +252,51 @@ int countFreePlayers(string dealerName)
     }   
 
     return count;
+}
+
+string endGame(const string& message, struct sockaddr_in& clientAddr, int sock)
+{
+    /* same as before, parse message for neccessary tokens */
+    string keyword, gameID, playerName, response;
+
+    stringstream ss(message);
+    ss >> keyword >> gameID >> playerName;
+
+    Game gameCheck = gameDatabase.find(gameID);
+    /* check if gameID in database */
+    if (gameCheck == gameDatabase.end())
+    {
+        response = "FAILURE: Game id not in database.\n";
+        
+        return response;
+    }
+    /* gameID is in database, check if dealer name is correct */
+    if (gameCheck->second.dealerName != playerName)
+    {
+        response = "FAILURE: Specified player name does not match name of specified Game's dealer.\n";
+
+        return response;
+    }
+
+    /* game is in database with correct dealer, move on to deleting from database and setting players to "free" from "in-play" */
+    /* there is at least two players, so we have to check if players 3 and 4 exist before changing their attributes */
+    
+    playerDatabase[gameCheck->second.dealerName].gameState = "free";    /* garunteed to be a dealer and one other, change their state */
+    playerDatabase[gameCheck->second.player2].gameState = "free";
+    if (gameCheck->second.numPlayers == 2)                              /* check if players 3 and 4 exist before changing state */
+    {
+        playerDatabase[gameCheck->second.player3].gameState = "free";
+    }
+    if (gameCheck->second.numPlayers == 2)
+    {
+        playerDatabase[gameCheck->second.player4].gameState = "free";
+    }
+
+    /* players freed, delete from database */
+    gameDatabase.erase(gameCheck);
+    response = "SUCCESS: Game with ID " + gameID + " has been ended.\n";        /* could attribute to show who won? */
+    
+    return response;
 }
 
 // function to handle register requests, 
@@ -489,6 +535,14 @@ int main(int argc, char* argv[])
         else if (message.find("de-register") == 0)
         {
             response = deregisterFunc(message, echoClntAddr, sock);
+        }
+        else if (message.find("start game") == 0)
+        {
+            response = start(message, echoClntAddr, sock);
+        }
+        else if (message.find("end") == 0)
+        {
+            response = end(message, echoClntAddr, sock);
         }
         else
         {
