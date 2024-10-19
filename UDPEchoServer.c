@@ -92,8 +92,10 @@ string registerFunc(const string &message, struct sockaddr_in& clientAddr, int s
     return response;
 }
 
-// returns if player is involved in an ongoing game, 1 == free , 0 == not in database or not free
-// i think checking if in database is redundant
+/*  redundant helper function, i phased this out
+        returns if player is involved in an ongoing game, 1 == free , 0 == not in database or not free
+        i think checking if in database is redundant
+*/
 bool getPlayerState(const string& playerName)
 {
     auto temp = playerDatabase.find(playerName);
@@ -112,7 +114,7 @@ bool getPlayerState(const string& playerName)
     return 0;
 }
 
-// query players currently registed with tracker, returns a list of players and their attributes
+/* query players currently registed with tracker, returns a list of players and their attributes */
 string queryPlayersFunc(struct sockaddr_in& clientAddr, int sock)
 {
     cout << "start querying" << endl << endl;
@@ -164,13 +166,19 @@ string queryGamesFunc(struct sockaddr_in& clientAddr, int sock)
     return response.str();
 }
 
+/*  
+    - Removes state info about player at tracker and exit the application
+    - Command returns success if and only if the given player is not involved in ongoing games
+    - In the case they are, the tuple associated with the peer is deleted from database and the peer can safely exit golf game
+      peer is involved in a game, command returns FAILURE
+*/
 string deregisterFunc(const string& message, struct sockaddr_in& clientAddr, int sock)
 {
-    // create response and attributes to be parsed from message
+    /* create response and attributes to be parsed from message */
     string response;
     string keyword, playerName;
 
-    //convert to ss to be able to parse (seperated by spaces)
+    /* convert to ss to be able to parse(seperated by spaces) */
     stringstream ss(message);
     ss >> keyword >> playerName;
 
@@ -181,10 +189,12 @@ string deregisterFunc(const string& message, struct sockaddr_in& clientAddr, int
     }
     else
     {
-        // player exists
-        // 
-        // check if player is in game or free, uses helper function defined below
-        if (getPlayerState(playerName) == 0)
+        /* player exists
+            now, create a player object to perform checks on and deregister
+        */
+        auto currPlayer = playerDatabase.find(playerName);                                                      /* check database map for existence of player w/ given player name */
+        
+        if (currPlayer->second.gameState != "free")
         {
             // player in database but not free, return 0
             response = "FAILURE: Given Player is participating in an ongoing game and cannot be removed.\n";
@@ -192,13 +202,13 @@ string deregisterFunc(const string& message, struct sockaddr_in& clientAddr, int
         else
         {
             // player is free, remove from database and exit
-            playerDatabase.erase(playerName);
-            //add correct code to response, to be 'returend'
+            playerDatabase.erase(currPlayer);                                                                   /* bug: was just removing playername, not actual player, silly mistake */
+            
+            // add correct code to response, to be 'returend'
             response = "SUCCESS: Player " + playerName + " is deregistered.\n";
             printf("server: Deregistered %s.\n", playerName.c_str());
         }
     }
-    
     //send built response str through sock
     //sendto(sock, response.str().c_str(), response.str().size(), 0, (struct sockaddr*)&clientAddr, sizeof(clientAddr));
 
