@@ -19,6 +19,7 @@
 #include <iostream>
 #include <map>          // for database 
 #include <sstream>
+#include <vector>
 
 using namespace std;
 
@@ -48,10 +49,209 @@ struct Game {
 
 };
 
-//database for players
+/* ---------------------------------------------------------------------------------------------------------------------------- */
+/* MAP NOTES:
+    - string is key, Player/Game is actual object
+    - to accsess values of Player/Game object in question, create a new Player/Game object using
+       Player/Game curr = Database.find(Name); 
+    - this will return a pointer to that Player/Game object in the database and store it in curr
+    - from here, checks or deletion/insertion can be done
+        curr->second.gameState/gameID/whatever is in the player/game struct
+*/
+/* database for players and games */
 
 map<string, Player> playerDatabase;
 map<string, Game> gameDatabase;
+
+/* id for game */
+int nextGame = 1; 
+
+/* takes a message with player name, #players, #holes
+    must parse this message to initiate a game with correct paramaters (func def should be similar to registerFunc, message handling as well
+    - FAILURE: 
+        - player is not registered
+        - n is not in proper range (2-4)
+        - not at least n other players in tracker (server)
+        - holes is not in proper range (1-9 inclusive)
+    - otherwise, tracer retursn SUCCCESS
+        - assigns new game-identifier for the games
+        - stores state recording that player is the dealer of the game
+        - trakcer alos selects n free players at random from those registerd as players in the game <import rand?, research!>
+        - returned to dealer is game-identifer && list of random players <vector pair>? 
+        - list consists o fplayer name, ipv4 addresses, p-port num ( of dealer and of other players ) stored in database
+        - tracker also updates the state of each player from free to in-play
+        - dealer will preform additional steps to set-up the play of the game,
+
+        */
+string start(const string& message, struct sockaddr_in& clientAddr, int sock)
+{
+    /* parse message for tokens */
+    string keyword, playerName, response = "FAILURE: error";  /* resposne to be returned later*/
+    int numPlayers, numHoles;           /* i think issues will arise with numPlayers */
+    unsigned short t_port, p_port;      /* t_port not neccessary i think, just copying from my registerfunc to get somethin started */
+   
+    stringstream ss(message);
+    ss >> keyword >> playerName >> numPlayers >> numHoles;
+
+    /* step 1: error checking
+       - check that numPlayers/Holes is within correct bounds, player is registerd, and n other players in tracker 
+       - put this logic in string helperFunc(int numPlayers, int numHoles, string playerName, that returns bool shouldContinue?
+       if (!(shouldcontinue)
+       {
+       return response_
+    */
+    
+    /* i think i need this later */
+    Player dealer = playerDatabase.find(playerName);                                          /* this will be used later */
+    checkParams(numPlayers, numHoles, playerName, response, shouldReturn);
+    cout << "shouldReturn: " << shouldReturn << endl;
+    if (shouldReturn)
+    {
+        cout << "response from start: " << response << endl;
+        return response;
+    }
+
+    /* checking is done, now can start with actual game creation */
+
+    /* step 2: start game with n players */
+
+    /* initialize new game with inputted values */
+    Game newGame;
+    newGame.numPlayers = numPlayers + 1;    /* +1 to include the dealer */
+    newGame.gameID = nextGameID++;          /* set it to curr value of nextGameID then increment it */
+
+    /* add dealer before dealing with other players */
+    newGame.dealerName = playerName;
+    playerDatabase[playerName].gameState = "in-game";
+
+    vector<string> freePlayers;             /* will be used to store players in game */
+    /* freePlayers.push_back(playerName);      /* add dealer to game and change status */
+
+    /* populate freePlayers vector with n freePlayers */
+    freePlayers = populate(numPlayers, freePlayers);
+
+    /* we now should have a vector that contains the name of 4 free players including the dealer */
+
+    /* add freePlayers to the game */
+    newGame.player2 = freePlayers[0];       /* always have at least one other player */
+    if (numPlayers >= 2)                             /* check if more than 2 players (not including dealer) */
+    {
+        newGame.player3 = freePlayers[1];
+    }
+    if (numPlayers == 3)
+    {
+        newGame.player4 = freePlayers[2];
+    }
+
+    /* add fully initialized newGame to the gameDatabase, maybe change gameDatabase to <int, Game> */
+    gameDatabase[to_string(newGame.gameID)] = newGame;
+
+
+    /* heavy lifting is done, now, return to main the correct resposne code */
+    response = "SUCCESS: Game " + to_string(newGame.gameID) + " started.\n";
+    response += "Dealer: " + playerName + "\n";
+    response += "Players: ";
+    /* iterate through freePlayers to print each ones names */
+    for (int i = 0; i < freePlayers.size(); ++i)
+    {
+        response += freePlayers[i].playerName + " ";    /* could format better */
+    }
+    response += "\n";
+
+    return response;
+}
+
+void checkParams(int& numPlayers, int& numHoles, string& playerName, string& response, bool& shouldReturn)
+{
+    if (!(numPlayers >= 2 && numPlayers <= 4))
+    {
+        response = "FAILURE: number of players not in bounds\n";
+        shouldReturn = true;
+
+        return response;
+    }
+    if (!(numHoles >= 1 && numHoles <= 9))
+    {
+        response = "FAILURE: number of holes not in bounds\n";
+        shouldReturn = true;
+
+        return response;
+    }
+    /* check that player is in database and free
+    */
+    Player dealer = playerDatabase.find(playerName);                                          /* this will be used later */
+    if (dealer == playerDatabase.end())
+    {
+        response = "FAILURE: player not in databse\n";
+        shouldReturn = true;
+
+        return response;
+    }
+    if (dealer->second.gameState != "free")
+    {
+        response = "FAILURE: dealer is not free\n";
+        shouldReturn = true;
+
+        return response;
+    }
+    /* check that there are enough available players */
+    if (countFreePlayers(playerName) < numPlayers)
+    {
+        response = "FAILURE: not enough free players\n";
+        shouldReturn = true;
+
+        return response;
+    }
+}
+/* helper function to populate the freePlayers string */
+void populate(int n, vector<string>& free)
+{
+    /* iterator to go through each Player in map */
+
+    /* to randomize, perhaps create a copy of playerDatabase, use  random_device rd; mt19937 g(rd()))shuffle(temp.begin(), temp.end(), g);
+    
+        wont try this until after base functionality is established 
+    */
+    map<string, Player>::iterator it = playerDatabase.begin();
+    int count = 0;
+    /* while not at end of map */
+    while (count < n && it != playerDatabase.end())     /* <= n ?*/
+    {
+        /* check if not looking at dealer and if player is free */
+        if (it->second.playerName != dealerName && it->second.gameState == "free")
+        {
+            cout << "free player found, adding to free players vector\n";
+            free.push_back(it);                     /* add to vector */
+            it->second.gameState = "in-game";       /* change gameState */
+            count++;
+        }
+        /* increment to next item in map */
+        ++it;
+    }
+}
+
+
+/* helper function to count # of free players */
+int countFreePlayers(string dealerName)
+{
+    int count = 0;
+    /* iterator to go through each Player in map */
+    map<string, Player>::iterator it = playerDatabase.begin();
+
+    while (it != playerDatabase.end())
+    {
+        /* check if not looking at dealer and if player is free */
+        if (it->second.playerName != dealerName && it->second.gameState == "free")
+        {
+            count++;
+            cout << "free player found, count = " << count << endl;
+        }
+        /* increment to next item in map */
+        ++it;
+    }   
+
+    return count;
+}
 
 // function to handle register requests, 
 // const string message contains "register <player> <IPv4> <t-port> <p-port>" (& to save memory since string isnt being manipulated)
