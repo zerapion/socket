@@ -254,6 +254,7 @@ int countFreePlayers(string dealerName)
     return count;
 }
 
+/* end game if dealer and ID exist and match, free all players in game */
 string endGame(const string& message, struct sockaddr_in& clientAddr, int sock)
 {
     /* same as before, parse message for neccessary tokens */
@@ -287,7 +288,7 @@ string endGame(const string& message, struct sockaddr_in& clientAddr, int sock)
     {
         playerDatabase[gameCheck->second.player3].gameState = "free";
     }
-    if (gameCheck->second.numPlayers == 2)
+    if (gameCheck->second.numPlayers == 3)
     {
         playerDatabase[gameCheck->second.player4].gameState = "free";
     }
@@ -397,17 +398,41 @@ string queryPlayersFunc(struct sockaddr_in& clientAddr, int sock)
     return response.str();
 }
 
+/* returns number of ongoing games and a list with info of each game ( gameid, name of dealer, naems of other players) */
 string queryGamesFunc(struct sockaddr_in& clientAddr, int sock)
 {
     stringstream response;
 
     if (gameDatabase.empty())
     {
-        response << "0\n";          // no games ongoing, return 0 and empty list
+        response << "0\n";          /* no games ongoing, return 0 and empty list */
+        
+        return response;
     }
 
-    //return
-    sendto(sock, response.str().c_str(), response.str().size()/*size of message*/, 0/*no special flags*/, (struct sockaddr*)&clientAddr/*given client address*/, sizeof(clientAddr));
+    response << "Number of ongoing games: " << gameDatabase.size() << "\nGame Information: \n";
+   
+    /* iterate through each game in database*/
+    map<string, Game>::iterator it = gameDatabase.begin();
+    while (it != gameDatabase.end())
+    {
+        /* format response with curr games info*/
+        response << "Game ID: " << it->second.gameID << "\n"
+            << "Dealer: " << it->second.dealerName << "\n"
+            << "Players: " << it->second.dealerName << ", " << it->second.player2;
+        if (it->second.numPlayers == 2)                              /* check if players 3 and 4 exist before adding to response */
+        {
+            response << ", " << it->second.player3;
+        }
+        if (it->second.numPlayers == 3)
+        {
+            response << ", " << it->second.player4;
+        }
+        response << "\n";
+        
+        /* increment to next item in map */
+        ++it;
+    }
 
     return response.str();
 }
